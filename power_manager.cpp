@@ -2,7 +2,7 @@
 // Created by 3545 on 25-11-1.
 //
 
-#include "powerctrl_ForFramework.h"
+#include "power_manager.h"
 
 MotorPower::MotorPower(const motor_power_init_t &motor_power_init_data)
     :K0(motor_power_init_data.k0),
