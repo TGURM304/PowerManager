@@ -4,16 +4,21 @@
 
 #include "powerctrl_ForFramework.h"
 
+MotorPower::MotorPower(const motor_power_init_t &motor_power_init_data)
+    :K0(motor_power_init_data.k0),
+     K1(motor_power_init_data.k1),
+     K2(motor_power_init_data.k2),
+     K3(motor_power_init_data.k3),
+     K4(motor_power_init_data.k4),
+     K5(motor_power_init_data.k5),
+     Current_Conversion(motor_power_init_data.real_current_conversion) {}
 
-MotorPowerCtrl::MotorPowerCtrl(const double k0,const double k1,const double k2,const double k3,const double k4,const double k5 ,const double current_conversion )
-    :K0(k0),K1(k1),K2(k2),K3(k3),K4(k4),K5(k5),Current_Conversion(current_conversion) {}
-
-double MotorPowerCtrl::getMotorRealCurrent(const double current) const {
+double MotorPower::getMotorRealCurrent(const double current) const {
     const double real_current = current/Current_Conversion;
     return real_current;
 }
 
-double MotorPowerCtrl::update(double current ,double speed,const E_Predict_Status_Type Predict_status,const E_CalMotorPower_Negative_Status_Type Negative_Status) {
+double MotorPower::update(double current ,double speed,const E_Predict_Status_Type Predict_status,const E_CalMotorPower_Negative_Status_Type Negative_Status) {
     const double product = current*speed;
     double power_sign = 1;
 
@@ -44,7 +49,7 @@ double MotorPowerCtrl::update(double current ,double speed,const E_Predict_Statu
     return power;
 }
 
-double MotorPowerCtrl::limiter(double *desired_current,const double current_speed, const double motor_power_limit ) {
+double MotorPower::limiter(double *desired_current,const double current_speed, const double motor_power_limit ) {
 
     if (desired_current == nullptr) {
         return 0.0;
@@ -113,6 +118,7 @@ double MotorPowerCtrl::limiter(double *desired_current,const double current_spee
 
     const double k1 = (-b - std::sqrt(discriminant)) / (2 * a);
     const double k2 = (-b + std::sqrt(discriminant)) / (2 * a);
+
     if ( (k1 > 0.0 and k1 < 1.0 ) and (k2 > 0.0 and k2 < 1.0) ) {
         *desired_current *=  std::max(k1, k2);
         return std::max(k1, k2);
@@ -129,11 +135,13 @@ double MotorPowerCtrl::limiter(double *desired_current,const double current_spee
 
 }
 
-std::vector<double> power_allocation_by_error(std::vector<double>& motor_errors_vector, double total_power_limit) {
+std::vector<double> power_allocation_by_error(std::vector<double>& motor_errors_vector, double total_power_limit,const double buffer_power_attenuation) {
 
 #ifdef M_Enable_PowerCompensation
-    total_power_limit *= (1-M_SmallGyro_Power_Compensation_Alpha);
+    total_power_limit *= (1-M_Power_Compensation_Alpha);
 #endif
+
+    total_power_limit *= buffer_power_attenuation;
 
     if (motor_errors_vector.size() != 4) {
         return {0.0, 0.0, 0.0, 0.0} ;
@@ -168,4 +176,57 @@ std::vector<double> power_allocation_by_error(std::vector<double>& motor_errors_
     }
 
     return motor_power_limits_vector;
+}
+
+ChassisPowerManager::ChassisPowerManager(MotorPower* motor1, MotorPower* motor2, MotorPower* motor3, MotorPower* motor4)
+: motors_(),motor_errors_() {
+    motors_[0] = motor1;
+    motors_[1] = motor2;
+    motors_[2] = motor3;
+    motors_[3] = motor4;
+    motor_errors_.fill(0.0);
+}
+
+void ChassisPowerManager::updateMotorError(const size_t index, const double error) {
+    if (index >= 4) return;
+    motor_errors_[index] = std::abs(error);
+}
+
+void ChassisPowerManager::allocatePower(double total_power_limit, double buffer_power_attenuation) {
+    std::vector<double> errors_vec(motor_errors_.begin(), motor_errors_.end());
+    std::vector<double> allocated_power = power_allocation_by_error(errors_vec, total_power_limit, buffer_power_attenuation);
+    if (allocated_power.size() == 4) {
+        for (size_t i = 0; i < 4; ++i) {
+            motors_[i]->power_limit = allocated_power[i];
+        }
+    }
+}
+
+double ChassisPowerManager::getTotalPredictNotLimitPower() const {
+    double total = 0.0;
+    for (const auto* motor : motors_) {
+        total += motor->predict_not_limit_power;
+    }
+    return total;
+}
+
+double ChassisPowerManager::getTotalPowerLimit() const {
+    double total = 0.0;
+    for (const auto* motor : motors_) {
+        total += motor->power_limit;
+    }
+    return total;
+}
+
+MovingAverageFilter::MovingAverageFilter(const size_t size)
+    : size(size), index(0), count(0), sum(0.0) {
+    buffer.resize(size, 0.0);
+}
+double MovingAverageFilter::update(const double new_value) {
+    sum -= buffer[index];
+    buffer[index] = new_value;
+    sum += new_value;
+    index = (index + 1) % size;
+    if (count < size) count++;
+    return sum / count;
 }
