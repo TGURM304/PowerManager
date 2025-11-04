@@ -51,10 +51,12 @@ public:
     void allocatePower(double total_power_limit, double buffer_power_attenuation = 1.0);
     [[nodiscard]] double getTotalPredictNotLimitPower() const;
     [[nodiscard]] double getTotalPowerLimit() const;
+    [[nodiscard]] double getTotalPredictPower() const;
 };
 
 std::vector<double> power_allocation_by_error(std::vector<double>& motor_errors_vector, double total_power_limit,double buffer_power_attenuation = 1.0);
 std::vector<double> allocate_SW_power( double total_power, double servo_rate, double servo_predict_want_power);
+
 class MovingAverageFilter {
 public:
     explicit MovingAverageFilter(size_t size);

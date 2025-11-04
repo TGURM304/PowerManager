@@ -61,6 +61,7 @@ double MotorPower::limiter(double *desired_current,const double current_speed, c
 
     if(motor_power_limit < 0) {
         *desired_current = 0;
+        update(*desired_current,current_speed,E_enable_predict);
         return 0.0;
     }
 
@@ -71,6 +72,7 @@ double MotorPower::limiter(double *desired_current,const double current_speed, c
 
     if (const double predicted_power = update(desired_current_, current_speed,E_enable_not_limit_predict);
        predicted_power <= motor_power_limit) {
+        update(*desired_current,current_speed,E_enable_predict);
         return 1.0;
        }
 
@@ -82,26 +84,32 @@ double MotorPower::limiter(double *desired_current,const double current_speed, c
     if (std::abs(a) < 1e-9) {
         if (std::abs(b) < 1e-9) {
             if(c <= 1e-9) {
+                update(*desired_current,current_speed,E_enable_predict);
                 return 1.0;
             }else {
                 *desired_current = 0;
+                update(*desired_current,current_speed,E_enable_predict);
                 return 0.0;
             }
         } else {
             double k = -c / b;
             if (k < 0.0) {
                 *desired_current = 0;
+                update(*desired_current,current_speed,E_enable_predict);
                 return 0.0;
             }
             if (k > 1.0) {
+                update(*desired_current,current_speed,E_enable_predict);
                 return 1.0;
             }
+            update(*desired_current,current_speed,E_enable_predict);
             return k;
         }
     }
 
     if (discriminant < 0) {
         *desired_current = 0;
+        update(*desired_current,current_speed,E_enable_predict);
         return 0.0;
     }
 
@@ -109,12 +117,15 @@ double MotorPower::limiter(double *desired_current,const double current_speed, c
         double k = -1.0 * b / (2 * a);
         if(k < 0.0) {
             *desired_current = 0;
+            update(*desired_current,current_speed,E_enable_predict);
             return 0.0;
         }
         if(k > 1.0) {
+            update(*desired_current,current_speed,E_enable_predict);
             return 1.0;
         }
         *desired_current *= k;
+        update(*desired_current,current_speed,E_enable_predict);
         return k;
     }
 
@@ -123,15 +134,19 @@ double MotorPower::limiter(double *desired_current,const double current_speed, c
 
     if ( (k1 > 0.0 and k1 < 1.0 ) and (k2 > 0.0 and k2 < 1.0) ) {
         *desired_current *=  std::max(k1, k2);
+        update(*desired_current,current_speed,E_enable_predict);
         return std::max(k1, k2);
     }else if ( (k1 > 0.0 and k1 < 1.0) and(k2 > 1.0 or k2 < 0.0) ) {
         *desired_current *= k1;
+        update(*desired_current,current_speed,E_enable_predict);
         return k1;
     }else if ( (k1 < 0.0 or k1 > 1.0 ) and(k2 > 0.0 and k2 < 1.0) ) {
         *desired_current *= k2;
+        update(*desired_current,current_speed,E_enable_predict);
         return k2;
     }else {
         *desired_current = 0;
+        update(*desired_current,current_speed,E_enable_predict);
         return 0.0;
     }
 
@@ -194,9 +209,9 @@ void ChassisPowerManager::updateMotorError(const size_t index, const double erro
     motor_errors_[index] = std::abs(error);
 }
 
-void ChassisPowerManager::allocatePower(double total_power_limit, double buffer_power_attenuation) {
+void ChassisPowerManager::allocatePower(const double total_power_limit, const double buffer_power_attenuation) {
     std::vector<double> errors_vec(motor_errors_.begin(), motor_errors_.end());
-    std::vector<double> allocated_power = power_allocation_by_error(errors_vec, total_power_limit, buffer_power_attenuation);
+    const std::vector<double> allocated_power = power_allocation_by_error(errors_vec, total_power_limit, buffer_power_attenuation);
     if (allocated_power.size() == 4) {
         for (size_t i = 0; i < 4; ++i) {
             motors_[i]->power_limit = allocated_power[i];
@@ -216,6 +231,14 @@ double ChassisPowerManager::getTotalPowerLimit() const {
     double total = 0.0;
     for (const auto* motor : motors_) {
         total += motor->power_limit;
+    }
+    return total;
+}
+
+double ChassisPowerManager::getTotalPredictPower() const {
+    double total = 0.0;
+    for (const auto* motor : motors_) {
+        total += motor->predict_power;
     }
     return total;
 }
