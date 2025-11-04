@@ -4,6 +4,8 @@
 
 #include "power_manager.h"
 
+#include <vector>
+
 MotorPower::MotorPower(const motor_power_init_t &motor_power_init_data)
     :K0(motor_power_init_data.k0),
      K1(motor_power_init_data.k1),
@@ -216,6 +218,28 @@ double ChassisPowerManager::getTotalPowerLimit() const {
         total += motor->power_limit;
     }
     return total;
+}
+
+//todo:未测试
+std::vector<double> allocate_SW_power(const double total_power, const double servo_rate, const double servo_predict_want_power) {
+
+    if( servo_rate > 1 or servo_rate <= 0) {
+        //不正常，禁止分配
+        return { 0.0,0.0 };
+    }
+
+    //[0]为舵的功率，[1]为轮的功率
+    std::vector<double> servo_wheel_power_vector(2);
+    double servo_max_allocate_power = total_power * servo_rate ;
+
+    if(servo_predict_want_power >= servo_max_allocate_power) {
+        servo_wheel_power_vector[0] = servo_max_allocate_power;
+    }else if (servo_predict_want_power < servo_max_allocate_power) {
+        servo_wheel_power_vector[0] = servo_predict_want_power;
+    }
+    servo_wheel_power_vector[1] = total_power - servo_wheel_power_vector[0];
+
+    return servo_wheel_power_vector;
 }
 
 MovingAverageFilter::MovingAverageFilter(const size_t size)
