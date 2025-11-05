@@ -4,7 +4,13 @@ motor_power_init_t M3508_power_init_data(0.65213,(-0.15659),0.00041660,0.0023541
 ## 自测GM6020参数结构体
 motor_power_init_t GM6020_power_init_data(0.7507578,(-0.0759636),(-0.00153397),0.01225624,0.19101805,0.0000066450,1000);
 
-## 常见的底盘四3508电机结构使用示例：
+## rotate_speed_allocation函数常用参数
+alpha = 0.6;
+
+## rotate_theta_forwardfeed函数常用参数
+kp = 0.0050;
+
+## 常见的底盘四3508电机限制功率使用示例:
 
 ```c++
 //init

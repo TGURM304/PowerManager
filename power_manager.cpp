@@ -6,6 +6,7 @@
 
 #include <vector>
 
+//在结构体里填入电机模型参数，然后填入结构体初始化class
 MotorPower::MotorPower(const motor_power_init_t &motor_power_init_data)
     :K0(motor_power_init_data.k0),
      K1(motor_power_init_data.k1),
@@ -15,11 +16,14 @@ MotorPower::MotorPower(const motor_power_init_t &motor_power_init_data)
      K5(motor_power_init_data.k5),
      Current_Conversion(motor_power_init_data.real_current_conversion) {}
 
+//内部参数来源于初始化时最后一个参数
 double MotorPower::getMotorRealCurrent(const double current) const {
     const double real_current = current/Current_Conversion;
     return real_current;
 }
 
+//预测类型默认为关闭预测(指你要填入电机反馈电流，来获取反馈的功率)
+//使用时请根据你填入的电流类型来填入对应的枚举
 double MotorPower::update(double current ,double speed,const E_Predict_Status_Type Predict_status,const E_CalMotorPower_Negative_Status_Type Negative_Status) {
     const double product = current*speed;
     double power_sign = 1;
@@ -51,6 +55,7 @@ double MotorPower::update(double current ,double speed,const E_Predict_Status_Ty
     return power;
 }
 
+//会直接改变最终发给电机的输出值，同时也会return一个衰减系数
 double MotorPower::limiter(double *desired_current,const double current_speed, const double motor_power_limit ) {
 
     if (desired_current == nullptr) {
@@ -152,6 +157,8 @@ double MotorPower::limiter(double *desired_current,const double current_speed, c
 
 }
 
+//一些相关的宏定义见.h,默认参数为测试比较靠谱的值
+//使用时效果不好请自行更改
 std::vector<double> power_allocation_by_error(std::vector<double>& motor_errors_vector, double total_power_limit,const double buffer_power_attenuation) {
 
 #ifdef M_Enable_PowerCompensation
@@ -195,6 +202,9 @@ std::vector<double> power_allocation_by_error(std::vector<double>& motor_errors_
     return motor_power_limits_vector;
 }
 
+//整个底盘的class
+//默认四个电机为一组，如果你用特殊构型请自行修改
+//如果你用舵轮的话，建议对舵组和轮组建立两个class，然后使用下面分配舵轮功率函数来分配总功率
 ChassisPowerManager::ChassisPowerManager(MotorPower* motor1, MotorPower* motor2, MotorPower* motor3, MotorPower* motor4)
 : motors_(),motor_errors_() {
     motors_[0] = motor1;
@@ -263,6 +273,36 @@ std::vector<double> allocate_SW_power(const double total_power, const double ser
     servo_wheel_power_vector[1] = total_power - servo_wheel_power_vector[0];
 
     return servo_wheel_power_vector;
+}
+
+double rotate_speed_allocation(const int16_t vx, const int16_t vy, const int16_t rotate, const double alpha) {
+    //简易分配，还可以加入最大功率限制的因素,效果不好就简单改下
+    //实际比赛(底盘功率限制随等级增加的情况下)建议把速度和等级(最大功率)联系起来
+    const double translation = sqrt(vx*vx + vy*vy);
+    double adjusted_rotate = std::abs(rotate) - alpha * translation;
+    if(std::abs(translation) <= 1e-9) {
+        return rotate;
+    }
+
+    if(adjusted_rotate <0) {
+        adjusted_rotate = 0;
+        return adjusted_rotate;
+    }
+
+    if(rotate < 0) {
+        return -adjusted_rotate;
+    }
+    return adjusted_rotate;
+
+}
+
+void rotate_theta_forwardfeed(double* theta,double rotate,double translation,double kp) {
+    //简易补偿
+    if(translation != 0) {
+        //其实补偿的大小还跟旋转速度占比平移速度有关，甚至还可以跟最大功率有关，如果效果不好就简单改下
+        //你也可以加权上面说的这个系数，比如乘以rotate / translation
+        *theta = *theta - kp  * rotate;
+    }
 }
 
 MovingAverageFilter::MovingAverageFilter(const size_t size)

@@ -7,6 +7,7 @@
 
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <vector>
 
 #define M_Too_Small_AllErrors 500.0
@@ -56,6 +57,8 @@ public:
 
 std::vector<double> power_allocation_by_error(std::vector<double>& motor_errors_vector, double total_power_limit,double buffer_power_attenuation = 1.0);
 std::vector<double> allocate_SW_power( double total_power, double servo_rate, double servo_predict_want_power);
+double rotate_speed_allocation(int16_t vx, int16_t vy, int16_t rotate, double alpha);
+void rotate_theta_forwardfeed(double* theta,double rotate,double translation,double kp);
 
 class MovingAverageFilter {
 public:
